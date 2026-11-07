@@ -1,0 +1,16 @@
+# Orca regenerates these on every `orca plugin dev load` / `orca plugin types`.
+.orca/
+
+# Not used by this plugin (Orca transpiles the sources itself), but a stray install must not land in git.
+node_modules/
+
+# Editor and OS litter.
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local debugging output: screenshots from `orca plugin shot`, logs, storage backups.
+*.log
+*.png
+*.bak.*

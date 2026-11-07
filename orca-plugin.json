@@ -1,0 +1,41 @@
+{
+  "manifestVersion": 2,
+  "id": "endpoint-editor",
+  "name": "Адреса серверов",
+  "version": "0.1.0",
+  "description": "Правка адреса и порта сохранённых удалённых окружений Orca из панели в правом сайдбаре.",
+  "engines": {
+    "orca": ">=1.4.248"
+  },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "panels": [
+      {
+        "id": "endpoints",
+        "title": "Адреса серверов",
+        "icon": "globe",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "workspace:read"
+    },
+    {
+      "kind": "workspace:write"
+    },
+    {
+      "kind": "terminal:send"
+    },
+    {
+      "kind": "terminal:read"
+    },
+    {
+      "kind": "storage:own"
+    }
+  ]
+}
