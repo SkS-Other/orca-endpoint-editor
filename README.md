@@ -1,113 +1,123 @@
 # Server endpoints
 
-Правка адреса и порта сохранённых удалённых окружений Orca из панели в правом сайдбаре
-(иконка глобуса → «Server endpoints»), с пресетами и проверкой доступности.
+[Русская версия](README.ru.md)
 
-## Что умеет
+Editing the address and port of saved Orca remote environments from a panel in the right sidebar
+(globe icon → «Server endpoints»), with presets and a reachability check.
 
-- Вкладка на каждое сохранённое окружение; внутри — текущий адрес, поля Host/Port, переключатель
-  `ws://`/`wss://` и `Применить`. Несохранённый черновик помечен `изменено` и переживает
-  «Обновить»/«Проверить порты»; «Применить» активна только когда есть что применять.
-- **Схема — часть адреса, а не окружения.** `wss://` годится только там, где на этом порту
-  действительно TLS: публичный домен на 443 — да, ZeroTier/LAN-адрес на 40455 — нет. Пресет хранит
-  схему вместе с host/port, поэтому переключение с домена на оверлей не притаскивает чужой `wss://`.
-  Старые пресеты без схемы получают её при загрузке: 443/8443 → `wss`, приватные и оверлейные
-  адреса → `ws`, остальное → `wss`.
-- **Переключение на локальный workspace.** Служебный шелл должен работать на этой машине, поэтому
-  при активном удалённом workspace панель сама активирует локальный и пишет об этом строкой под
-  заголовком. Вернуть прежний удалённый она не может — Orca в этом состоянии не отдаёт его id.
-- **Пресеты** — именованные пары host/port (со схемой) на каждое окружение. «Сохранить как пресет»
-  запоминает текущий черновик, нажатие на пресет сразу переключает окружение (один клик вместо
-  набора адреса). Иконка карандаша переименовывает пресет на месте (Enter — сохранить, «Отмена» —
-  отменить), иконка корзины удаляет. Пресеты живут в storage плагина (`storage:own`), а не в конфиге
-  Orca; пресеты окружений, которых в Orca больше нет, вычищаются при обновлении списка.
-- **Проверить порты** — TCP-проверка всех адресов (текущих и пресетов) одним запросом: зелёный
-  `отвечает`, красный `не отвечает`. Список адресов уезжает в python-скрипт, ответ — битовая строка.
-- **Проверить подключение** — двухступенчатая проверка адреса из полей (можно проверять черновик до
-  применения): WebSocket-рукопожатие, а для уже сохранённого адреса ещё и настоящий коннект Orca.
-- Эндпоинты, которыми управляет Orca (SSH-туннель, `127.0.0.1`), помечены `managed by Orca` и
-  заблокированы для правки.
+## What it does
 
-## Зачем так
+- A tab per saved environment; inside — the current address, Host/Port fields, a `ws://`/`wss://`
+  toggle and `Применить`. An unsaved draft is marked `изменено` and survives
+  «Обновить»/«Проверить порты»; «Применить» is active only when there is something to apply.
+- **The scheme is part of the address, not of the environment.** `wss://` is only appropriate where
+  TLS really runs on that port: a public domain on 443 — yes, a ZeroTier/LAN address on 40455 — no.
+  A preset stores the scheme together with host/port, so switching from a domain to the overlay does
+  not drag in someone else's `wss://`. Old presets without a scheme get one on load: 443/8443 → `wss`,
+  private and overlay addresses → `ws`, everything else → `wss`.
+- **Switching to a local workspace.** The helper shell has to run on this machine, so when a remote
+  workspace is active the panel activates a local one itself and says so in a line under the
+  heading. It cannot bring the previous remote one back — in that state Orca does not expose its id.
+- **Presets** — named host/port pairs (with the scheme) per environment. «Сохранить как пресет»
+  remembers the current draft, clicking a preset switches the environment right away (one click
+  instead of typing the address). The pencil icon renames a preset in place (Enter — save, «Отмена» —
+  cancel), the trash icon deletes it. Presets live in the plugin storage (`storage:own`), not in the
+  Orca config; presets of environments that no longer exist in Orca are cleaned out when the list is
+  refreshed.
+- **Проверить порты** — TCP check of all addresses (current and preset ones) in a single request:
+  green `отвечает`, red `не отвечает`. The list of addresses goes to a python script, the answer
+  comes back as a bit string.
+- **Проверить подключение** — a two-stage check of the address from the fields (a draft can be
+  checked before it is applied): a WebSocket handshake, and for an already saved address also a real
+  Orca connection.
+- Endpoints managed by Orca (SSH tunnel, `127.0.0.1`) are marked `managed by Orca` and locked for
+  editing.
 
-Плагинный API Orca не даёт ни доступа к файлам, ни методов для окружений, ни вкладки в Настройках.
-Поэтому панель идёт в обход: worker плагина (trusted-worker) печатает команду в реальный шелл
-через `terminal.sendText` и читает ответ через `terminal.read`, а сам шелл правит
-`~/Library/Application Support/orca/orca-environments.json` скриптом на python3.
+## Why it works this way
 
-Терминал — плохой канал, поэтому в нём четыре правила (все проверены тестами):
+Orca's plugin API gives neither access to files, nor methods for environments, nor a tab in Settings.
+So the panel goes around it: the plugin worker (trusted-worker) prints a command into the real shell
+via `terminal.sendText` and reads the answer via `terminal.read`, while the shell itself edits
+`~/Library/Application Support/orca/orca-environments.json` with a python3 script.
 
-- **одна команда за раз**: `run()` завёрнут в очередь, потому что две одновременные `sendText`
-  склеиваются в одну строку и оставляют шелл в незакрытой кавычке (`dquote>`), после чего он
-  молча висит;
-- **короткие строки** (< 180 символов): длинную строку PTY может обрезать, и кавычки снова
-  разъезжаются. Скрипт едет base64-чанками по 120 символов в `/tmp`, декодируется и запускается
-  отдельной короткой командой;
-- **маркеры печатаются двумя литералами** (`printf '%s%s' 'A' 'B'`), чтобы эхо самой команды не
-  содержало маркер и не могло сойти за её вывод;
-- **служебный терминал открывается в активном worktree**: `terminal.sendText` отказывает любому
-  терминалу вне активного worktree, а `terminal.create` принимает любой workspace. Поэтому «первый
-  локальный workspace» не годится — терминал создаётся в активном, и его наличие там проверяется
-  через `workspace.readContext` ещё до первого ввода. Если активен workspace на удалённом сервере
-  (или не активен ни один), панель сама переключает Orca на локальный через `workspace.open`:
-  шелл обязан быть на этой машине, иначе он правил бы файл окружений другого хоста.
+The terminal is a poor channel, so there are four rules in it (all covered by tests):
 
-Плюс: перед работой `shellReady` проверяет, что шелл отвечает на пустую команду, и ждёт до 6 с.
-Неудачный терминал переиспользуется следующей попыткой, а не пересоздаётся на каждую — иначе один
-зависший шелл оставлял за собой вкладку за вкладкой. Ввод, который хост не принял (`accepted:
-false`), повторяется трижды, после чего панель называет настоящую причину вместо «шелл не отвечает».
+- **one command at a time**: `run()` is wrapped in a queue, because two simultaneous `sendText`
+  calls get glued into a single line and leave the shell in an unclosed quote (`dquote>`), after
+  which it hangs silently;
+- **short lines** (< 180 characters): the PTY may truncate a long line, and the quotes drift apart
+  again. The script travels in base64 chunks of 120 characters into `/tmp`, is decoded and launched
+  by a separate short command;
+- **markers are printed as two literals** (`printf '%s%s' 'A' 'B'`), so that the echo of the command
+  itself does not contain the marker and cannot be taken for its output;
+- **the helper terminal opens in the active worktree**: `terminal.sendText` refuses any terminal
+  outside the active worktree, and `terminal.create` accepts any workspace. Therefore "the first
+  local workspace" is not good enough — the terminal is created in the active one, and its presence
+  there is verified via `workspace.readContext` before the first input. If a workspace on a remote
+  server is active (or none is active), the panel switches Orca to a local one itself via
+  `workspace.open`: the shell has to be on this machine, otherwise it would be editing the
+  environments file of another host.
 
-Ограничения, которые остаются:
+On top of that: before starting, `shellReady` checks that the shell responds to an empty command, and
+waits up to 6 s. A failed terminal is reused by the next attempt instead of being recreated every
+time — otherwise one hung shell left tab after tab behind it. Input the host did not accept
+(`accepted: false`) is retried three times, after which the panel names the real cause instead of
+"the shell is not responding".
 
-- нужен хотя бы один **локальный** workspace: если активен удалённый, панель переключает Orca на
-  локальный сама — последний использованный, иначе папку, иначе первый в списке. Вернуть прежний
-  удалённый workspace она не может: в этом состоянии его id недоступен (`workspace.readContext`
-  возвращает null). Переключение требует capability `workspace:write`, поэтому при первом запуске
-  после обновления Orca попросит `--approve`;
-- нужен `python3` в PATH этого терминала;
-- вывод читается из отрендеренных строк, поэтому список едет base64-чанками с контролем длины и
-  до трёх попыток; парсер терпим к склейке эха с выводом, но не к потерянной строке;
-- проверка доступности — обычный TCP-connect с таймаутом 2 с, а не рукопожатие Orca: `reachable`
-  значит «порт отвечает», а не «рантайм авторизует этот токен»;
-- правится локальный `orca-environments.json`; на paired-серверах и в WSL файл лежит в другом месте.
+Limitations that remain:
 
-## Как проверить, что подключение будет
+- at least one **local** workspace is required: if a remote one is active, the panel switches Orca to
+  a local one itself — the last used, otherwise the folder, otherwise the first in the list. It
+  cannot return the previous remote workspace: in that state its id is unavailable
+  (`workspace.readContext` returns null). Switching requires the `workspace:write` capability, so on
+  the first launch after an Orca update it will ask for `--approve`;
+- `python3` is required in the PATH of that terminal;
+- output is read from rendered lines, so the list travels in base64 chunks with length control and
+  up to three attempts; the parser tolerates the echo being glued to the output, but not a lost line;
+- the reachability check is a plain TCP connect with a 2 s timeout, not an Orca handshake: `reachable`
+  means "the port answers", not "the runtime authorizes this token";
+- the local `orca-environments.json` is what gets edited; on paired servers and in WSL the file lives
+  somewhere else.
 
-Три уровня, от слабого к настоящему:
+## How to check that the connection will work
 
-1. **Порт отвечает** («Проверить порты», TCP-connect с таймаутом 2 с). Дёшево и сразу по всем адресам, но
-   доказывает только то, что на порту кто-то слушает. Для «VPN поднялся / машина в сети» этого
-   достаточно.
-2. **WebSocket отвечает** («Проверить подключение» по черновику). Шлёт настоящий upgrade-запрос
-   (`GET / HTTP/1.1`, `Upgrade: websocket`, `Sec-WebSocket-Key`) и ждёт `101 Switching Protocols`.
-   Так отсекается «порт открыт, но это не Orca» — например база или чужой HTTP-сервис. Работает до
-   применения адреса, потому что не трогает конфиг.
-3. **Orca подключилась** («Проверить подключение» на сохранённом адресе). Дополнительно запускает
-   `orca repo list --environment <имя> --json` в том же шелле. Это единственная проверка, которая
-   доказывает всё сразу: адрес, доступность и то, что рантайм принял токен этого окружения.
-   Ответ `remote_runtime_unavailable` значит, что Orca по этому адресу не соединилась.
+Three levels, from the weak one to the real one:
 
-Что важно понимать: `101` от рукопожатия не значит «Orca авторизует этот токен» — токен
-проверяется только уровнем 3. И наоборот, уровень 3 возможен только после «Применить»: Orca соединяется
-по сохранённому адресу, а не по тому, что набрано в полях. Поэтому для черновика панель честно
-пишет «сначала примени адрес».
+1. **The port answers** («Проверить порты», TCP connect with a 2 s timeout). Cheap and covers all
+   addresses at once, but it only proves that someone is listening on the port. For "the VPN is up /
+   the machine is on the network" that is enough.
+2. **The WebSocket answers** («Проверить подключение» on the draft). Sends a real upgrade request
+   (`GET / HTTP/1.1`, `Upgrade: websocket`, `Sec-WebSocket-Key`) and waits for `101 Switching
+   Protocols`. This filters out "the port is open, but it is not Orca" — a database or someone else's
+   HTTP service, for example. It works before the address is applied, because it does not touch the
+   config.
+3. **Orca connected** («Проверить подключение» on a saved address). Additionally runs
+   `orca repo list --environment <имя> --json` in the same shell. This is the only check that proves
+   everything at once: the address, the reachability, and that the runtime accepted this
+   environment's token. A `remote_runtime_unavailable` response means Orca did not connect over that
+   address.
 
-## Запросы worker'а
+What is important to understand: a `101` from the handshake does not mean "Orca authorizes this
+token" — the token is only checked by level 3. And conversely, level 3 is only possible after
+«Применить»: Orca connects over the saved address, not over what is typed in the fields. That is why
+for a draft the panel honestly says «сначала примени адрес».
 
-- `endpoints.list` — все окружения и их эндпоинты (host, port, зависимость).
-- `endpoints.set` — пишет `<схема>://host:port` в файл; схему присылает панель, а не наследует
-  сохранённая (иначе переключение с `wss://домен:443` на оверлей даёт `wss://10.x:40455`), держит
-  последние 10 бэкапов `orca-environments.json.bak.<epoch>`, затем проверяет порт. Orca
-  подхватывает изменение без перезапуска; токен и ключ устройства не трогаются.
-- `endpoints.probe` — TCP-connect по списку адресов (до 64), ответ в порядке входа.
-- `endpoints.test` — WebSocket-рукопожатие по адресу, затем (если адрес уже сохранён)
-  `orca repo list --environment <имя> --json`; отвечает вердиктом рукопожатия, деталью и ответом
-  Orca либо причиной, почему вторая половина пропущена.
+## Worker requests
 
-## Разработка
+- `endpoints.list` — all environments and their endpoints (host, port, dependency).
+- `endpoints.set` — writes `<схема>://host:port` into the file; the scheme is sent by the panel rather
+  than inherited from the saved one (otherwise switching from `wss://домен:443` to the overlay gives
+  `wss://10.x:40455`), keeps the last 10 backups `orca-environments.json.bak.<epoch>`, then checks the
+  port. Orca picks up the change without a restart; the token and the device key are not touched.
+- `endpoints.probe` — TCP connect over a list of addresses (up to 64), the answer in input order.
+- `endpoints.test` — WebSocket handshake to the address, then (if the address is already saved)
+  `orca repo list --environment <имя> --json`; answers with the handshake verdict, a detail and Orca's
+  response, or the reason why the second half was skipped.
 
-Сборки нет: Orca транспилирует `src/*.ts(x)` сама. Зависимостей и `package.json` тоже нет —
-только `python3` в PATH того терминала, где работает шелл.
+## Development
+
+There is no build: Orca transpiles `src/*.ts(x)` itself. There are no dependencies and no
+`package.json` either — only `python3` in the PATH of the terminal where the shell runs.
 
 ```sh
 orca plugin validate .        # манифест и типы запросов
@@ -122,37 +132,38 @@ orca plugin dev reload        # после правок в dev-папке
 orca plugin dev unload .
 ```
 
-Что покрыто тестами: сохранение пресета и переключение одним нажатием, переименование на месте
-и отмена переименования, удаление пресета,
-сообщение об успехе после вызванного им refresh, сохранение черновика при Refresh, блокировка
-managed-эндпоинта, показ причины ошибки списка; в worker'е — отсутствие чередования двух команд,
-длина типизируемых строк, отказ на опасный host и на невалидный порт, пустой probe без шелла,
-запись присланной схемы вместо унаследованной, переключение на локальный workspace из удалённого,
-замена `terminalId` из чужого worktree, отказ шелла на ввод;
-проверка подключения — рабочий коннект, пропуск Orca-половины для черновика и «это не WebSocket»;
-вычистка пресетов удалённых окружений.
+What the tests cover: saving a preset and switching with one click, renaming in place and cancelling
+a rename, deleting a preset,
+the success message after the refresh it caused, keeping the draft on Refresh, locking a
+managed endpoint, showing the cause of a list error; in the worker — no interleaving of two commands,
+the length of typed lines, refusal on a dangerous host and on an invalid port, an empty probe without
+a shell, writing the sent scheme instead of the inherited one, switching to a local workspace from a
+remote one, replacing a `terminalId` from a foreign worktree, the shell refusing input;
+the connection check — a working connection, skipping the Orca half for a draft and "this is not a
+WebSocket"; cleaning out presets of removed environments.
 
-`npx tsc -p .` проверяет только рантайм-код: тесты исключены в `tsconfig.json`, потому что
-`find()` возвращает `TestElement | null` и на них пришлось бы рассыпать `!`. Типы для `orca`,
-`orca-host` и остальных модулей Orca лежат в `.orca/types` и перегенерируются при
-`orca plugin dev load` (в git их нет).
+`npx tsc -p .` checks runtime code only: the tests are excluded in `tsconfig.json`, because
+`find()` returns `TestElement | null` and they would have to be sprinkled with `!`. Types for `orca`,
+`orca-host` and the other Orca modules live in `.orca/types` and are regenerated on
+`orca plugin dev load` (they are not in git).
 
-Правила проекта — в [AGENTS.md](AGENTS.md): четыре правила терминального канала, модель
-capabilities, где лежат storage и бэкапы.
+The project rules are in [AGENTS.md](AGENTS.md): the four rules of the terminal channel, the
+capabilities model, where storage and backups live.
 
-## Грабли, на которые уже наступили
+## Pitfalls we have already stepped on
 
-- **Склейка команд.** Две параллельные `sendText` дали строку с незакрытой кавычкой и вечный
-  `dquote>`: шелл эхоит ввод, `terminal.read` продолжает работать, поэтому плагин считал терминал
-  живым и таймаутил на каждой команде. Лечится очередью + проверкой живости.
-- **Длинные строки.** Одна строка на 2 КБ (два base64-скрипта в `endpoints.set`) — тот же эффект.
-  Теперь каждая строка короткая, а тест это сторожит.
-- **Эхо как вывод.** Маркеры, напечатанные одним литералом, присутствовали в эхе команды, так что
-  `lastIndexOf` мог взять эхо за результат. Теперь маркер печатается двумя частями.
-- **Склейка эха с выводом.** Терминал рисует эхо последней введённой строки и первый вывод
-  программы на одной строке (`...py__LEN__ 1264`), из-за чего строгий парсер «строка начинается с
-  `__LEN__`» падал. Теперь длина ищется регуляркой, а чанки — только строки чистой base64 длиной
-  ≥ 32 (эхо всегда содержит пробелы, слэши, точки или дефисы).
-- **Атом с `persist: 'storage'`.** После `update` значение в атоме менялось, а storage и рендер
-  возвращались к прежнему (гонка двух подряд идущих записей). Пресеты читаются и пишутся явно
-  через `storage.get`/`storage.set`, атом обычный.
+- **Glued commands.** Two parallel `sendText` calls produced a line with an unclosed quote and an
+  eternal `dquote>`: the shell echoes the input, `terminal.read` keeps working, so the plugin
+  considered the terminal alive and timed out on every command. Fixed by the queue + a liveness
+  check.
+- **Long lines.** A single 2 KB line (two base64 scripts in `endpoints.set`) — the same effect.
+  Now every line is short, and a test guards it.
+- **Echo as output.** Markers printed as a single literal were present in the command echo, so
+  `lastIndexOf` could take the echo for the result. Now the marker is printed in two parts.
+- **Echo glued to output.** The terminal draws the echo of the last typed line and the program's first
+  output on one line (`...py__LEN__ 1264`), which made the strict parser "the line starts with
+  `__LEN__`" fail. Now the length is found with a regex, and chunks are only lines of pure base64 of
+  length ≥ 32 (the echo always contains spaces, slashes, dots or hyphens).
+- **An atom with `persist: 'storage'`.** After `update` the value in the atom changed, but storage and
+  the render went back to the previous one (a race between two consecutive writes). Presets are read
+  and written explicitly via `storage.get`/`storage.set`, the atom is a plain one.
